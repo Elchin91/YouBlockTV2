@@ -98,10 +98,11 @@ struct YouTubeTVDevice: Codable, Identifiable {
     let port: Int
     let location: String
     var tvCode: String?
+    var loungeToken: String?
     var isConnected: Bool = false
     let capabilities: [String]
     
-    init(id: String, name: String, model: String? = nil, ipAddress: String, port: Int = 8080, location: String = "", tvCode: String? = nil, isConnected: Bool = false, capabilities: [String] = []) {
+    init(id: String, name: String, model: String? = nil, ipAddress: String, port: Int = 8080, location: String = "", tvCode: String? = nil, loungeToken: String? = nil, isConnected: Bool = false, capabilities: [String] = []) {
         self.id = id
         self.name = name
         self.model = model
@@ -109,6 +110,7 @@ struct YouTubeTVDevice: Codable, Identifiable {
         self.port = port
         self.location = location
         self.tvCode = tvCode
+        self.loungeToken = loungeToken
         self.isConnected = isConnected
         self.capabilities = capabilities
     }
