@@ -63,5 +63,11 @@
         <string>_airplay._tcp</string>
         <string>_http._tcp</string>
     </array>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>background-processing</string>
+        <string>background-app-refresh</string>
+        <string>fetch</string>
+    </array>
 </dict>
 </plist>
