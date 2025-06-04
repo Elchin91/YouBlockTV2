@@ -793,8 +793,8 @@ class ViewController: UIViewController {
     // MARK: - Settings
     private func loadSettings() {
         let defaults = UserDefaults.standard
-        autoSkipSwitch.isOn = defaults.object(forKey: "autoSkipEnabled") as? Bool ?? true
-        muteAdsSwitch.isOn = defaults.object(forKey: "muteAdsEnabled") as? Bool ?? false
+        autoSkipSwitch.isOn = defaults.bool(forKey: "autoSkipEnabled")
+        muteAdsSwitch.isOn = defaults.bool(forKey: "muteAdsEnabled")
         
         // Загружаем выбранные категории
         let savedCategories = defaults.stringArray(forKey: "skipCategories") ?? ["sponsor", "intro", "outro", "interaction", "selfpromo"]
