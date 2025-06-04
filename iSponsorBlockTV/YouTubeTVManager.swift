@@ -486,15 +486,63 @@ class YouTubeTVManager: ObservableObject {
     
     // MARK: - Device Monitoring
     private func startMonitoring(device: YouTubeTVDevice) {
-        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            self.checkCurrentVideo(for: device)
+        // Останавливаем предыдущий таймер если есть
+        stopMonitoring()
+        
+        // Создаем таймер с weak self для избежания retain cycle
+        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkCurrentVideo(for: device)
         }
+        
+        // Добавляем таймер в RunLoop для работы в фоне
+        if let timer = monitoringTimer {
+            RunLoop.current.add(timer, forMode: .common)
+        }
+        
+        print("🔄 Запущен мониторинг устройства \(device.name)")
+    }
+    
+    private func stopMonitoring() {
+        monitoringTimer?.invalidate()
+        monitoringTimer = nil
+        print("⏸️ Мониторинг остановлен")
     }
     
     private func checkCurrentVideo(for device: YouTubeTVDevice) {
-        // Эмулируем проверку текущего видео
-        // В реальной реализации это будет запрос к YouTube TV API для получения состояния воспроизведения
+        // Проверяем что устройство все еще подключено
+        guard connectedDevices.contains(where: { $0.id == device.id && $0.isConnected }) else {
+            print("❌ Устройство \(device.name) больше не подключено, останавливаем мониторинг")
+            stopMonitoring()
+            return
+        }
+        
         print("🔍 Мониторинг видео на \(device.name)")
+        
+        // Эмулируем проверку SponsorBlock сегментов
+        let testVideoIds = ["dQw4w9WgXcQ", "jNQXAC9IVRw", "9bZkp7q19f0"]
+        let randomVideoId = testVideoIds.randomElement() ?? "dQw4w9WgXcQ"
+        
+        // Проверяем сегменты с таймаутом
+        checkSponsorSegmentsWithTimeout(videoId: randomVideoId, device: device)
+    }
+    
+    private func checkSponsorSegmentsWithTimeout(videoId: String, device: YouTubeTVDevice) {
+        let timeoutTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+            print("⏰ Таймаут проверки сегментов для \(videoId)")
+        }
+        
+        checkSponsorSegments(videoId: videoId) { [weak self] segments in
+            timeoutTimer.invalidate()
+            
+            if !segments.isEmpty {
+                print("🎯 Найдено \(segments.count) сегментов для \(videoId)")
+                
+                // Эмулируем пропуск сегмента
+                if let firstSegment = segments.first {
+                    self?.skipToTime(firstSegment.segment[1], on: device)
+                }
+            }
+        }
     }
     
     // MARK: - Sponsor Block Integration
@@ -551,10 +599,23 @@ class YouTubeTVManager: ObservableObject {
     
     // MARK: - Cleanup
     func disconnect() {
+        print("🔌 Отключаемся от всех устройств...")
+        
         connectionStatus = .disconnected
         connectedDevices.removeAll()
-        monitoringTimer?.invalidate()
-        monitoringTimer = nil
+        
+        // Останавливаем мониторинг
+        stopMonitoring()
+        
+        // Отменяем все активные сетевые задачи
+        session.invalidateAndCancel()
+        
+        print("✅ Отключение завершено")
+    }
+    
+    deinit {
+        print("🗑️ YouTubeTVManager освобождается из памяти")
+        disconnect()
     }
 }
 
