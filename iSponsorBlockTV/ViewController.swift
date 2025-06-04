@@ -78,6 +78,13 @@ class ViewController: UIViewController {
                 self?.scanDevicesButton.setTitle(isScanning ? "Поиск..." : "Сканировать сеть", for: .normal)
             }
             .store(in: &cancellables)
+        
+        youTubeTVManager.$currentVideoInfo
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] videoInfo in
+                self?.updateCurrentVideoDisplay(videoInfo)
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - UI Setup
@@ -548,13 +555,82 @@ class ViewController: UIViewController {
     }
     
     private func updateActiveVideo(for device: YouTubeTVDevice) {
-        // Эмулируем получение информации о текущем видео
-        youTubeTVManager.checkSponsorSegments(videoId: "dQw4w9WgXcQ") { [weak self] segments in
-            if segments.isEmpty {
-                self?.activeVideoLabel.text = "Текущее видео: Нет спонсорских сегментов"
-            } else {
-                self?.activeVideoLabel.text = "Текущее видео: Найдено \(segments.count) сегментов для пропуска"
+        // Получаем информацию о текущем видео из YouTubeTVManager
+        if let videoInfo = youTubeTVManager.currentVideoInfo {
+            updateCurrentVideoDisplay(videoInfo)
+        } else {
+            activeVideoLabel.text = "Текущее видео: Не воспроизводится"
+        }
+    }
+    
+    private func updateCurrentVideoDisplay(_ videoInfo: VideoInfo?) {
+        guard let videoInfo = videoInfo else {
+            activeVideoLabel.text = "Текущее видео: Не воспроизводится"
+            return
+        }
+        
+        // Проверяем сегменты для текущего видео
+        youTubeTVManager.checkSponsorSegments(videoId: videoInfo.videoId) { [weak self] segments in
+            DispatchQueue.main.async {
+                let title = videoInfo.title.isEmpty ? "YouTube видео" : videoInfo.title
+                
+                if segments.isEmpty {
+                    self?.activeVideoLabel.text = "📺 \(title)\n💚 Нет спонсорских сегментов"
+                } else {
+                    self?.activeVideoLabel.text = "📺 \(title)\n⚠️ Найдено \(segments.count) сегментов для пропуска"
+                    
+                    // Если включен автопропуск, пытаемся пропустить текущие сегменты
+                    if YouTubeTVSettings.shared.autoSkipEnabled {
+                        self?.trySkipCurrentSegments(segments: segments, currentTime: videoInfo.currentTime)
+                    }
+                }
             }
+        }
+    }
+    
+    private func trySkipCurrentSegments(segments: [SponsorSegment], currentTime: TimeInterval) {
+        // Проверяем есть ли сегмент который нужно пропустить прямо сейчас
+        for segment in segments {
+            if currentTime >= segment.startTime && currentTime < segment.endTime {
+                // Мы внутри спонсорского сегмента!
+                if let connectedDevice = youTubeTVManager.connectedDevices.first(where: { $0.isConnected }) {
+                    print("🎯 Пропускаем сегмент \(segment.category): \(segment.startTime) -> \(segment.endTime)")
+                    youTubeTVManager.skipToTime(segment.endTime, on: connectedDevice)
+                    
+                    // Показываем уведомление
+                    showSkipNotification(category: segment.category, duration: segment.duration)
+                }
+                break
+            }
+        }
+    }
+    
+    private func showSkipNotification(category: String, duration: TimeInterval) {
+        let categoryName = getCategoryDisplayName(category)
+        let alert = UIAlertController(
+            title: "⏭️ Сегмент пропущен",
+            message: "Пропущен сегмент: \(categoryName)\nДлительность: \(Int(duration)) сек",
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        
+        // Автоматически закрываем через 2 секунды
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            alert.dismiss(animated: true)
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func getCategoryDisplayName(_ category: String) -> String {
+        switch category {
+        case "sponsor": return "Спонсорский сегмент"
+        case "intro": return "Вступление"
+        case "outro": return "Концовка"
+        case "interaction": return "Призыв к действию"
+        case "selfpromo": return "Самореклама"
+        default: return category.capitalized
         }
     }
     
