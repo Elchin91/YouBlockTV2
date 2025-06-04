@@ -136,4 +136,22 @@ struct VideoInfo: Codable {
     let duration: TimeInterval
     let currentTime: TimeInterval
     let isPlaying: Bool
+    
+    init(videoId: String, title: String, channelName: String, duration: TimeInterval, currentTime: TimeInterval, isPlaying: Bool = true) {
+        self.videoId = videoId
+        self.title = title
+        self.channelName = channelName
+        self.duration = duration
+        self.currentTime = currentTime
+        self.isPlaying = isPlaying
+    }
+}
+
+enum YouTubeTVCommand {
+    case seek(time: Double)
+    case mute
+    case unmute
+    case play
+    case pause
+    case skip
 } 
