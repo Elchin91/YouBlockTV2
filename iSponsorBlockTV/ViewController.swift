@@ -393,12 +393,32 @@ class ViewController: UIViewController {
             return
         }
         
-        // Преобразуем код в правильный формат
-        let cleanCode = code.replacingOccurrences(of: "-", with: "").uppercased()
+        // Проверяем формат кода
+        let cleanCode = code.replacingOccurrences(of: " ", with: "")
+                           .replacingOccurrences(of: "-", with: "")
+                           .uppercased()
+        
+        if cleanCode.count != 12 || !cleanCode.allSatisfy({ $0.isNumber }) {
+            showAlert(title: "Неверный формат кода", 
+                     message: "Код должен содержать 12 цифр.\nПример: 766730152896 или 766 730 152 896")
+            return
+        }
+        
+        print("📱 Попытка подключения с кодом: \(cleanCode)")
         youTubeTVManager.connectWithTVCode(cleanCode)
         
-        // Очищаем поле ввода
-        tvCodeTextField.text = ""
+        // Показываем индикатор загрузки
+        connectWithCodeButton.setTitle("Подключение...", for: .normal)
+        connectWithCodeButton.isEnabled = false
+        
+        // Сброс через 10 секунд если нет ответа
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            if self.connectWithCodeButton.title(for: .normal) == "Подключение..." {
+                self.connectWithCodeButton.setTitle("Подключиться к TV", for: .normal)
+                self.connectWithCodeButton.isEnabled = true
+            }
+        }
+        
         view.endEditing(true)
     }
     
@@ -441,6 +461,7 @@ class ViewController: UIViewController {
         case .disconnected:
             statusLabel.text = "Не подключено к устройствам"
             statusLabel.textColor = .systemGray
+            resetConnectButton()
             
         case .scanning:
             statusLabel.text = "Поиск устройств в сети..."
@@ -454,11 +475,25 @@ class ViewController: UIViewController {
             statusLabel.text = "✅ Подключено к YouTube TV"
             statusLabel.textColor = .systemGreen
             updateStatistics()
+            resetConnectButton()
+            tvCodeTextField.text = ""  // Очищаем поле после успешного подключения
             
         case .error(let message):
-            statusLabel.text = "❌ Ошибка: \(message)"
+            statusLabel.text = "❌ \(message)"
             statusLabel.textColor = .systemRed
+            resetConnectButton()
+            
+            // Показываем более подробную ошибку
+            if message.contains("Неверный код") {
+                showAlert(title: "Проблема с подключением", 
+                         message: "Код \(tvCodeTextField.text ?? "") не подходит.\n\n• Убедитесь что код правильно отображается на TV\n• Код действителен ограниченное время\n• Попробуйте получить новый код")
+            }
         }
+    }
+    
+    private func resetConnectButton() {
+        connectWithCodeButton.setTitle("Подключиться к TV", for: .normal)
+        connectWithCodeButton.isEnabled = true
     }
     
     private func updateStatistics() {
