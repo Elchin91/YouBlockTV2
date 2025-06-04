@@ -110,13 +110,13 @@ class YouTubeTVManager: ObservableObject {
         )
         
         connection.start(queue: .global())
-        connection.send(content: ssdpMessage) { error in
+        connection.send(content: ssdpMessage, completion: .contentProcessed { error in
             if let error = error {
                 print("❌ Ошибка отправки SSDP: \(error)")
             } else {
                 print("✅ SSDP запрос отправлен")
             }
-        }
+        })
         
         // Слушаем ответы устройств
         self.receiveSSDP(connection: connection)
@@ -234,7 +234,7 @@ class YouTubeTVManager: ObservableObject {
         guard let url = URL(string: location) else { return }
         
         session.dataTask(with: url) { [weak self] data, response, error in
-            guard let data = data else { return }
+            guard data != nil else { return }
             
             let device = YouTubeTVDevice(
                 id: UUID().uuidString,
