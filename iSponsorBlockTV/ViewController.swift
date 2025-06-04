@@ -232,7 +232,9 @@ class ViewController: UIViewController {
         // Add switch targets
         autoSkipSwitch.addTarget(self, action: #selector(settingChanged), for: .valueChanged)
         muteAdsSwitch.addTarget(self, action: #selector(settingChanged), for: .valueChanged)
-    }
+        
+        // Setup constraints
+        setupConstraints()
     }
     
     private func createSettingRow(title: String, subtitle: String, switchControl: UISwitch) -> UIStackView {
@@ -257,7 +259,9 @@ class ViewController: UIViewController {
         subtitleLabel.numberOfLines = 0
         
         labelsStack.addArrangedSubview(titleLabel)
-        labelsStack.addArrangedSubview(subtitleLabel)
+        if !subtitle.isEmpty {
+            labelsStack.addArrangedSubview(subtitleLabel)
+        }
         
         switchControl.translatesAutoresizingMaskIntoConstraints = false
         
