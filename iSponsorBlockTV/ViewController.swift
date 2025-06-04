@@ -42,6 +42,17 @@ class ViewController: UIViewController {
         setupConstraints()
         setupObservers()
         loadSettings()
+        setupBackgroundMode()
+    }
+    
+    deinit {
+        print("🗑️ ViewController освобождается из памяти")
+        
+        // Убираем наблюдателей
+        NotificationCenter.default.removeObserver(self)
+        
+        // Отключаемся от устройств
+        youTubeTVManager.disconnect()
     }
     
     private func setupObservers() {
@@ -614,6 +625,95 @@ class ViewController: UIViewController {
         return containerView
     }
     
+    // MARK: - Background Mode
+    private func setupBackgroundMode() {
+        // Подписываемся на уведомления о смене состояния приложения
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        
+        print("📱 Настроен фоновый режим")
+    }
+    
+    @objc private func appWillEnterForeground() {
+        print("📱 Приложение возвращается из фона")
+        
+        // Восстанавливаем подключения
+        if !youTubeTVManager.connectedDevices.isEmpty {
+            print("🔄 Восстанавливаем мониторинг устройств")
+            updateConnectionStatus(youTubeTVManager.connectionStatus)
+        }
+    }
+    
+    @objc private func appDidEnterBackground() {
+        print("📱 Приложение ушло в фон")
+        
+        // Сохраняем состояние
+        saveCurrentState()
+        
+        // Запрашиваем время для фоновой работы
+        requestBackgroundTime()
+    }
+    
+    @objc private func appWillTerminate() {
+        print("📱 Приложение завершается")
+        saveCurrentState()
+        youTubeTVManager.disconnect()
+    }
+    
+    private func saveCurrentState() {
+        let defaults = UserDefaults.standard
+        
+        // Сохраняем подключенные устройства
+        if let connectedDevice = youTubeTVManager.connectedDevices.first {
+            defaults.set(connectedDevice.tvCode, forKey: "lastConnectedTVCode")
+            defaults.set(connectedDevice.name, forKey: "lastConnectedTVName")
+            print("💾 Сохранено состояние: \(connectedDevice.name)")
+        }
+        
+        defaults.synchronize()
+    }
+    
+    private func requestBackgroundTime() {
+        var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+        
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "YouTubeTVMonitoring") {
+            // Время фоновой работы истекло
+            print("⏰ Время фоновой работы истекло")
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+        
+        // Даем приложению еще 30 секунд для работы в фоне
+        DispatchQueue.global().async {
+            Thread.sleep(forTimeInterval: 30)
+            
+            if backgroundTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                backgroundTaskID = .invalid
+            }
+        }
+        
+        print("⏱️ Запрошено время для фоновой работы")
+    }
+
     // MARK: - Settings
     private func loadSettings() {
         let defaults = UserDefaults.standard
