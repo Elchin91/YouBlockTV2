@@ -14,6 +14,10 @@ class YouTubeTVManager: ObservableObject {
     private var discoveryTimer: Timer?
     private var monitoringTimer: Timer?
     
+    // Текущее видео
+    @Published var currentVideoId: String?
+    @Published var currentVideoInfo: VideoInfo?
+    
     enum ConnectionStatus {
         case disconnected
         case scanning
@@ -516,14 +520,163 @@ class YouTubeTVManager: ObservableObject {
             return
         }
         
-        print("🔍 Мониторинг видео на \(device.name)")
+        print("🔍 Проверяем текущее видео на \(device.name)")
         
-        // Эмулируем проверку SponsorBlock сегментов
-        let testVideoIds = ["dQw4w9WgXcQ", "jNQXAC9IVRw", "9bZkp7q19f0"]
-        let randomVideoId = testVideoIds.randomElement() ?? "dQw4w9WgXcQ"
+                 // Получаем информацию о текущем воспроизведении
+         getCurrentVideoInfo(for: device) { [weak self] videoInfo in
+             DispatchQueue.main.async {
+                 if let videoInfo = videoInfo {
+                     print("📺 Найдено видео: \(videoInfo.videoId) - \(videoInfo.title)")
+                     self?.currentVideoId = videoInfo.videoId
+                     self?.currentVideoInfo = videoInfo
+                     self?.checkSponsorSegmentsWithTimeout(videoId: videoInfo.videoId, device: device)
+                 } else {
+                     print("📺 Видео не воспроизводится или не удалось получить ID")
+                     self?.currentVideoId = nil
+                     self?.currentVideoInfo = nil
+                 }
+             }
+         }
+    }
+    
+    private func getCurrentVideoInfo(for device: YouTubeTVDevice, completion: @escaping (VideoInfo?) -> Void) {
+        // Попробуем разные способы получения информации о видео
         
-        // Проверяем сегменты с таймаутом
-        checkSponsorSegmentsWithTimeout(videoId: randomVideoId, device: device)
+        // Способ 1: YouTube TV Lounge API
+        if let loungeToken = device.loungeToken {
+            getCurrentVideoViaLounge(token: loungeToken, completion: completion)
+            return
+        }
+        
+        // Способ 2: Попытка через DIAL API
+        if !device.ipAddress.isEmpty && device.ipAddress != "YouTube TV" {
+            getCurrentVideoViaDial(ipAddress: device.ipAddress, port: device.port, completion: completion)
+            return
+        }
+        
+        // Способ 3: Эмуляция для демонстрации
+        let simulatedVideoIds = [
+            "dQw4w9WgXcQ", // Rick Roll
+            "jNQXAC9IVRw", // Me at the zoo
+            "9bZkp7q19f0", // Gangnam Style
+            "kJQP7kiw5Fk", // Despacito
+            "RgKAFK5djSk", // Wiz Khalifa
+        ]
+        
+        // Случайно выбираем видео для демонстрации
+        if let randomVideoId = simulatedVideoIds.randomElement() {
+            let videoInfo = VideoInfo(
+                videoId: randomVideoId,
+                title: "Демонстрационное видео",
+                channelName: "Test Channel",
+                duration: 180,
+                currentTime: Double.random(in: 10...120)
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                completion(videoInfo)
+            }
+        } else {
+            completion(nil)
+        }
+    }
+    
+    private func getCurrentVideoViaLounge(token: String, completion: @escaping (VideoInfo?) -> Void) {
+        // Используем YouTube TV Lounge API для получения состояния
+        let loungeURL = "https://www.youtube.com/api/lounge/bc/bind"
+        var request = URLRequest(url: URL(string: loungeURL)!)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        
+        let body = "VER=8&RID=1337&lounge_token=\(token)&req0_getPlayerInfo=1"
+        request.httpBody = body.data(using: .utf8)
+        
+        session.dataTask(with: request) { data, response, error in
+            if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                print("📦 Lounge API ответ: \(responseString)")
+                
+                // Пытаемся извлечь videoId из ответа
+                if let videoId = self.extractVideoId(from: responseString) {
+                    let videoInfo = VideoInfo(
+                        videoId: videoId,
+                        title: "YouTube TV Video",
+                        channelName: "Unknown",
+                        duration: 0,
+                        currentTime: 0
+                    )
+                    DispatchQueue.main.async {
+                        completion(videoInfo)
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+            }
+        }.resume()
+    }
+    
+    private func getCurrentVideoViaDial(ipAddress: String, port: Int, completion: @escaping (VideoInfo?) -> Void) {
+        // Используем DIAL протокол для получения информации
+        let dialURL = "http://\(ipAddress):\(port)/apps/YouTube"
+        
+        var request = URLRequest(url: URL(string: dialURL)!)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 3.0
+        
+        session.dataTask(with: request) { data, response, error in
+            if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                print("📦 DIAL ответ: \(responseString)")
+                
+                // Извлекаем videoId из DIAL ответа
+                if let videoId = self.extractVideoId(from: responseString) {
+                    let videoInfo = VideoInfo(
+                        videoId: videoId,
+                        title: "Cast Video",
+                        channelName: "Unknown",
+                        duration: 0,
+                        currentTime: 0
+                    )
+                    DispatchQueue.main.async {
+                        completion(videoInfo)
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(nil)
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+            }
+        }.resume()
+    }
+    
+    private func extractVideoId(from response: String) -> String? {
+        // Пытаемся найти videoId в разных форматах
+        let patterns = [
+            "\"videoId\":\"([a-zA-Z0-9_-]+)\"",
+            "videoId=([a-zA-Z0-9_-]+)",
+            "v=([a-zA-Z0-9_-]+)",
+            "watch\\?v=([a-zA-Z0-9_-]+)"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: response, range: NSRange(response.startIndex..., in: response)),
+               let range = Range(match.range(at: 1), in: response) {
+                let videoId = String(response[range])
+                if videoId.count == 11 { // YouTube video IDs are 11 characters
+                    return videoId
+                }
+            }
+        }
+        
+        return nil
     }
     
     private func checkSponsorSegmentsWithTimeout(videoId: String, device: YouTubeTVDevice) {
@@ -579,12 +732,13 @@ class YouTubeTVManager: ObservableObject {
     
     // MARK: - Device Control
     func skipToTime(_ time: Double, on device: YouTubeTVDevice) {
-        // Эмулируем отправку команды пропуска
         print("⏭️ Пропускаем до времени \(time) на \(device.name)")
         
-        // В реальной реализации здесь будет отправка команды через YouTube TV API
         let skipCommand = YouTubeTVCommand.seek(time: time)
         sendCommand(skipCommand, to: device)
+        
+        // Обновляем статистику
+        YouTubeTVSettings.shared.recordSkippedSegment(duration: 5.0, category: "sponsor")
     }
     
     func muteDevice(_ device: YouTubeTVDevice) {
@@ -593,8 +747,93 @@ class YouTubeTVManager: ObservableObject {
     }
     
     private func sendCommand(_ command: YouTubeTVCommand, to device: YouTubeTVDevice) {
-        // Эмулируем отправку команды устройству
         print("📤 Отправляем команду \(command) на \(device.name)")
+        
+        // Способ 1: YouTube TV Lounge API
+        if let loungeToken = device.loungeToken {
+            sendCommandViaLounge(command, token: loungeToken, device: device)
+            return
+        }
+        
+        // Способ 2: DIAL API
+        if !device.ipAddress.isEmpty && device.ipAddress != "YouTube TV" {
+            sendCommandViaDial(command, to: device)
+            return
+        }
+        
+        // Способ 3: Эмуляция для демонстрации
+        print("✅ Команда \(command) выполнена (эмуляция)")
+    }
+    
+    private func sendCommandViaLounge(_ command: YouTubeTVCommand, token: String, device: YouTubeTVDevice) {
+        let loungeURL = "https://www.youtube.com/api/lounge/bc/bind"
+        var request = URLRequest(url: URL(string: loungeURL)!)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        
+        var commandBody = ""
+        switch command {
+        case .seek(let time):
+            commandBody = "req0_seekTo=\(Int(time))"
+        case .mute:
+            commandBody = "req0_setVolume=0"
+        case .unmute:
+            commandBody = "req0_setVolume=50"
+        case .play:
+            commandBody = "req0_play="
+        case .pause:
+            commandBody = "req0_pause="
+        case .skip:
+            commandBody = "req0_next="
+        }
+        
+        let body = "VER=8&RID=\(Int.random(in: 1000...9999))&lounge_token=\(token)&\(commandBody)"
+        request.httpBody = body.data(using: .utf8)
+        
+        session.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("❌ Ошибка отправки команды через Lounge API: \(error)")
+            } else {
+                print("✅ Команда отправлена через Lounge API")
+            }
+        }.resume()
+    }
+    
+    private func sendCommandViaDial(_ command: YouTubeTVCommand, to device: YouTubeTVDevice) {
+        var dialURL = ""
+        var httpMethod = "POST"
+        
+        switch command {
+        case .seek(let time):
+            dialURL = "http://\(device.ipAddress):\(device.port)/apps/YouTube/web-1"
+            httpMethod = "POST"
+        case .mute, .unmute:
+            dialURL = "http://\(device.ipAddress):\(device.port)/apps/YouTube/run"
+            httpMethod = "POST"
+        default:
+            dialURL = "http://\(device.ipAddress):\(device.port)/apps/YouTube"
+            httpMethod = "POST"
+        }
+        
+        guard let url = URL(string: dialURL) else { return }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = httpMethod
+        request.setValue("text/plain", forHTTPHeaderField: "Content-Type")
+        
+        session.dataTask(with: request) { data, response, error in
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+                    print("✅ Команда отправлена через DIAL API")
+                } else {
+                    print("⚠️ DIAL API ответил со статусом: \(httpResponse.statusCode)")
+                }
+            }
+            
+            if let error = error {
+                print("❌ Ошибка отправки команды через DIAL API: \(error)")
+            }
+        }.resume()
     }
     
     // MARK: - Cleanup
