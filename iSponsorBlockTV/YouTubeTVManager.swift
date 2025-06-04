@@ -673,9 +673,10 @@
         }
         
         private func createRealYouTubeTVConnection(tvCode: String, loungeToken: String, name: String) {
-            print("🎉 Создание реального подключения к YouTube TV")
+            print("🎉 СОЗДАНИЕ РЕАЛЬНОГО ПОДКЛЮЧЕНИЯ К YOUTUBE TV")
             print("📱 Устройство: \(name)")
             print("🔑 Lounge Token: \(loungeToken)")
+            print("📟 Screen ID: \(tvCode)")
             
             let device = YouTubeTVDevice(
                 id: tvCode,
@@ -694,13 +695,19 @@
             connectedDevices.append(device)
             connectionStatus = .connected
             
-            // Сразу начинаем мониторинг активности
-            startMonitoring(device: device)
+            print("🚀 ПОДКЛЮЧЕНИЕ СОЗДАНО! Отправляем уведомление на TV...")
             
-            // Показываем уведомление об успешном подключении на TV
+            // КРИТИЧЕСКИ ВАЖНО: Сначала уведомляем TV, потом запускаем мониторинг
             sendConnectionNotification(to: device)
             
-            print("✅ Устройство \(name) успешно подключено!")
+            // Запускаем мониторинг с небольшой задержкой, чтобы TV успел обработать подключение
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.startMonitoring(device: device)
+                print("🔄 Мониторинг активности запущен")
+            }
+            
+            print("✅ РЕАЛЬНОЕ ПОДКЛЮЧЕНИЕ К \(name) ЗАВЕРШЕНО!")
+            print("📺 Проверьте экран TV - должно появиться 'connected new device'")
         }
         
         private func createRealConnection(tvCode: String, deviceURL: String) {
@@ -724,24 +731,87 @@
             print("✅ Устройство подключено через DIAL!")
         }
         
-        private func sendConnectionNotification(to device: YouTubeTVDevice) {
-            // Отправляем уведомление на TV о подключении (если есть lounge token)
+                private func sendConnectionNotification(to device: YouTubeTVDevice) {
+            // Отправляем РЕАЛЬНОЕ уведомление на TV о подключении устройства
             guard let loungeToken = device.loungeToken,
-                let url = URL(string: "https://www.youtube.com/api/lounge/bc/bind") else {
+                  let url = URL(string: "https://www.youtube.com/api/lounge/bc/bind") else {
+                print("❌ Нет lounge token для уведомления TV")
                 return
             }
+            
+            print("📡 ОТПРАВКА КРИТИЧЕСКОГО УВЕДОМЛЕНИЯ НА TV")
+            print("🔑 Token: \(loungeToken)")
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 15.0
+            
+            // Заголовки как у реального YouTube TV клиента
+            request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
+            request.setValue("https://www.youtube.com", forHTTPHeaderField: "Origin")
+            request.setValue("https://www.youtube.com/tv", forHTTPHeaderField: "Referer")
+            
+            // КРИТИЧЕСКИ ВАЖНО: Формируем правильное уведомление о подключении
+            let randomId = Int.random(in: 10000...99999)
+            let bodyData = """
+                VER=8&RID=\(randomId)&loungeIdToken=\(loungeToken)&count=0&req0_newClientConnected=iSponsorBlockTV_iOS
+                """
+            request.httpBody = bodyData.data(using: .utf8)
+            
+            print("📤 Отправляем на TV:")
+            print("   Body: \(bodyData)")
+            
+            session.dataTask(with: request) { data, response, error in
+                DispatchQueue.main.async {
+                    if let httpResponse = response as? HTTPURLResponse {
+                        print("📊 TV Response Status: \(httpResponse.statusCode)")
+                        
+                        if httpResponse.statusCode == 200 {
+                            print("✅ УСПЕХ! TV получил уведомление о подключении!")
+                            print("📺 На экране TV должно появиться 'connected new device'")
+                        } else {
+                            print("⚠️ Неожиданный статус от TV: \(httpResponse.statusCode)")
+                        }
+                    }
+                    
+                    if let error = error {
+                        print("❌ Ошибка уведомления TV: \(error.localizedDescription)")
+                    }
+                    
+                    if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                        print("📦 TV ответил: '\(responseString)'")
+                    } else {
+                        print("📦 TV ответил без данных")
+                    }
+                }
+                
+                // Дополнительно отправляем команду подтверждения подключения
+                self.sendConnectionConfirmation(to: device)
+            }.resume()
+        }
+        
+        private func sendConnectionConfirmation(to device: YouTubeTVDevice) {
+            guard let loungeToken = device.loungeToken,
+                  let url = URL(string: "https://www.youtube.com/api/lounge/bc/bind") else {
+                return
+            }
+            
+            print("🔗 Отправляем подтверждение подключения...")
             
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             
-            let bodyData = "loungeIdToken=\(loungeToken)&count=0"
-            request.httpBody = bodyData.data(using: .utf8)
+            let confirmationData = """
+                VER=8&RID=\(Int.random(in: 10000...99999))&loungeIdToken=\(loungeToken)&count=1&req0_clientConnected=true
+                """
+            request.httpBody = confirmationData.data(using: .utf8)
             
             session.dataTask(with: request) { data, response, error in
                 if let httpResponse = response as? HTTPURLResponse,
-                httpResponse.statusCode == 200 {
-                    print("📺 Уведомление отправлено на TV")
+                   httpResponse.statusCode == 200 {
+                    print("✅ Подтверждение подключения отправлено на TV")
                 }
             }.resume()
         }
