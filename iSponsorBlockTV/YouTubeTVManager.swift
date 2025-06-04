@@ -492,8 +492,10 @@ class YouTubeTVManager: ObservableObject {
             ipAddress: "YouTube Cloud",
             port: 443,
             location: "https://www.youtube.com/api/lounge",
-            capabilities: ["youtube", "sponsorblock"],
-            loungeToken: loungeToken
+            tvCode: tvCode,
+            loungeToken: loungeToken,
+            isConnected: true,
+            capabilities: ["youtube", "sponsorblock"]
         )
         
         // Добавляем устройство к подключенным
@@ -501,7 +503,7 @@ class YouTubeTVManager: ObservableObject {
         connectionStatus = .connected
         
         // Сразу начинаем мониторинг активности
-        startVideoMonitoring(for: device)
+        startMonitoring(device: device)
         
         // Показываем уведомление об успешном подключении на TV
         sendConnectionNotification(to: device)
@@ -525,7 +527,7 @@ class YouTubeTVManager: ObservableObject {
         connectedDevices.append(device)
         connectionStatus = .connected
         
-        startVideoMonitoring(for: device)
+        startMonitoring(device: device)
         
         print("✅ Устройство подключено через DIAL!")
     }
@@ -994,7 +996,7 @@ class YouTubeTVManager: ObservableObject {
         
         switch command {
         case .seek(let time):
-            dialURL = "http://\(device.ipAddress):\(device.port)/apps/YouTube/web-1"
+            dialURL = "http://\(device.ipAddress):\(device.port)/apps/YouTube/web-1?t=\(Int(time))"
             httpMethod = "POST"
         case .mute, .unmute:
             dialURL = "http://\(device.ipAddress):\(device.port)/apps/YouTube/run"
