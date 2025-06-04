@@ -10,8 +10,6 @@
     <string>iSponsorBlockTV</string>
     <key>CFBundleIdentifier</key>
     <string>com.elchin91.isponsorblockTV</string>
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
