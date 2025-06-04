@@ -433,7 +433,7 @@ class ViewController: UIViewController {
     
     private func updateYouTubeTVSettings() {
         // Обновляем настройки в YouTubeTVManager
-        var settings = YouTubeTVSettings.shared
+        let settings = YouTubeTVSettings.shared
         settings.autoSkipEnabled = autoSkipSwitch.isOn
         settings.muteAdsEnabled = muteAdsSwitch.isOn
         
