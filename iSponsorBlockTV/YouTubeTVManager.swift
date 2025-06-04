@@ -856,14 +856,4 @@ class YouTubeTVManager: ObservableObject {
         print("🗑️ YouTubeTVManager освобождается из памяти")
         disconnect()
     }
-}
-
-// MARK: - Command Enum
-enum YouTubeTVCommand {
-    case play
-    case pause
-    case seek(time: Double)
-    case mute
-    case unmute
-    case skipSegment(SponsorSegment)
 } 
