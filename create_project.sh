@@ -25,8 +25,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 EOF
 
-# Создаем NetworkManager.swift если его еще нет
-if [ ! -f "iSponsorBlockTV/NetworkManager.swift" ]; then
+# Пропускаем создание NetworkManager.swift - используем YouTubeTVManager
+if false; then
 cat > iSponsorBlockTV/NetworkManager.swift << 'EOF'
 import Foundation
 
@@ -236,9 +236,12 @@ struct Statistics: Codable {
 EOF
 fi
 
+# Пропускаем создание ViewController.swift - используем существующий
+if false; then
 cat > iSponsorBlockTV/ViewController.swift << 'EOF'
 import UIKit
 import Network
+import Combine
 
 class ViewController: UIViewController {
     
@@ -248,25 +251,31 @@ class ViewController: UIViewController {
     
     private let titleLabel = UILabel()
     private let statusLabel = UILabel()
-    private let serverAddressTextField = UITextField()
-    private let connectButton = UIButton(type: .system)
+    
+    // TV Code Input Section
+    private let tvCodeHeaderLabel = UILabel()
+    private let tvCodeTextField = UITextField()
+    private let connectWithCodeButton = UIButton(type: .system)
+    private let scanDevicesButton = UIButton(type: .system)
     
     private let devicesHeaderLabel = UILabel()
     private let devicesStackView = UIStackView()
     
     private let settingsHeaderLabel = UILabel()
-    private let sponsorBlockEnabledSwitch = UISwitch()
-    private let adBlockEnabledSwitch = UISwitch()
     private let autoSkipSwitch = UISwitch()
+    private let muteAdsSwitch = UISwitch()
+    private let skipCategoriesStackView = UIStackView()
     
     private let statisticsHeaderLabel = UILabel()
     private let skippedCountLabel = UILabel()
     private let savedTimeLabel = UILabel()
+    private let activeVideoLabel = UILabel()
     
     // MARK: - Properties
-    private var isConnected = false
-    private var serverAddress = "http://192.168.1.100:8000"
-    private var connectedDevices: [Device] = []
+    private let youTubeTVManager = YouTubeTVManager.shared
+    private var skippedSegments = 0
+    private var timeSaved = 0
+    private var cancellables = Set<AnyCancellable>()
     
     override func viewDidLoad() {
         super.viewDidLoad()
